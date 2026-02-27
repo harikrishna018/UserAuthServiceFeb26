@@ -1,5 +1,7 @@
 package dev.umang.userauthservice.services;
 
+import dev.umang.userauthservice.clients.KafkaProducerClient;
+import dev.umang.userauthservice.dtos.EmailDto;
 import dev.umang.userauthservice.exceptions.IncorrectPasswordException;
 import dev.umang.userauthservice.exceptions.UserAlreadyExistException;
 import dev.umang.userauthservice.exceptions.UserNotRegisteredException;
@@ -20,6 +22,7 @@ import org.antlr.v4.runtime.misc.Pair;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
+import tools.jackson.databind.ObjectMapper;
 
 import javax.crypto.SecretKey;
 import java.util.*;
@@ -40,6 +43,12 @@ public class AuthService implements IAuthService{
 
     @Autowired
     private BCryptPasswordEncoder bCryptPasswordEncoder;
+
+    @Autowired
+    private KafkaProducerClient kafkaProducerClient;
+
+    @Autowired
+    private ObjectMapper objectMapper;
     /*
     encode(raw password) return encoded password
     128 bit random salt and cost factor
@@ -59,6 +68,7 @@ public class AuthService implements IAuthService{
 
     @Override
     public User signup(String name, String email, String password) {
+        System.out.println("Signup called with name: " + name + ", email: " + email);
         /*
         every user should register with a unique email
          */
@@ -98,6 +108,22 @@ public class AuthService implements IAuthService{
         roles.add(role);
 
         user.setRoles(roles);
+
+        /*
+        Publish a message to the queue
+         */
+
+        System.out.println("Publishing message to Kafka topic: Signup for email: " + email);
+
+        EmailDto emailDto = new EmailDto();
+        emailDto.setTo(email);
+        emailDto.setFrom("umang_1@scaler.com");
+        emailDto.setSubject("Welcome to our application");
+        emailDto.setBody("Hi " + name + ",\n\nThank you for registering with our application. We're excited to have you on board!\n\nBest regards,\nThe Team");
+
+        kafkaProducerClient.sendMessage("Signup" ,
+                objectMapper.writeValueAsString(emailDto));
+        System.out.println("Message published to Kafka topic: Signup for email: " + email);
 
         return userRepo.save(user);
     }
@@ -187,9 +213,15 @@ public class AuthService implements IAuthService{
          */
         Optional<Session> optionalSession = sessionRepo.findByToken(token);
 
+
+
         if(optionalSession.isEmpty()){
             return false;
         }
+
+//        if(optionalSession.get().getToken().equals(token)){
+//            return true;
+//        }
 
         JwtParser jwtParser = Jwts.parser().verifyWith(secretKey).build();
 

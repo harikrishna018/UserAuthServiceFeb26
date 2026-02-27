@@ -64,6 +64,7 @@ public class AuthController {
 
     @PostMapping("/signup")
     ResponseEntity<UserDTO> signup(@RequestBody SignupRequestDTO signupRequestDTO){
+        System.out.println("Signup API called with name: " + signupRequestDTO.getName() + ", email: " + signupRequestDTO.getEmail());
         try {
             User user = authService.signup(signupRequestDTO.getName(),
                     signupRequestDTO.getEmail(),
